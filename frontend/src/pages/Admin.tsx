@@ -1,0 +1,209 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
+import { getSession, getStreamUrl } from '../api';
+import type { SummaryPayload, StatusPayload } from '../api';
+import ThemeCard from '../components/ThemeCard';
+
+export default function Admin() {
+  const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
+  const adminToken = searchParams.get('token') || '';
+
+  const [question, setQuestion] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [responseCount, setResponseCount] = useState(0);
+  const [minRequired, setMinRequired] = useState(3);
+  const [summary, setSummary] = useState<SummaryPayload | null>(null);
+  const [sseError, setSseError] = useState('');
+  const [connected, setConnected] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Load session info
+  useEffect(() => {
+    if (!sessionId) return;
+    getSession(sessionId)
+      .then((data) => {
+        setQuestion(data.question);
+        setResponseCount(data.response_count);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Session not found');
+        setLoading(false);
+      });
+  }, [sessionId]);
+
+  // SSE connection
+  const connectSSE = useCallback(() => {
+    if (!sessionId || !adminToken) return;
+
+    const url = getStreamUrl(sessionId, adminToken);
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    es.onopen = () => {
+      setConnected(true);
+      setSseError('');
+    };
+
+    es.addEventListener('summary', (e) => {
+      try {
+        const data: SummaryPayload = JSON.parse(e.data);
+        setSummary(data);
+        setResponseCount(data.response_count);
+        setSseError('');
+      } catch {
+        console.error('Failed to parse summary event');
+      }
+    });
+
+    es.addEventListener('status', (e) => {
+      try {
+        const data: StatusPayload = JSON.parse(e.data);
+        setResponseCount(data.response_count);
+        setMinRequired(data.min_required);
+      } catch {
+        console.error('Failed to parse status event');
+      }
+    });
+
+    es.addEventListener('error', (e) => {
+      try {
+        const data = JSON.parse((e as MessageEvent).data);
+        setSseError(data.message || 'Summarization error');
+        setResponseCount(data.response_count || responseCount);
+      } catch {
+        // Connection error, will auto-reconnect
+      }
+    });
+
+    es.onerror = () => {
+      setConnected(false);
+      es.close();
+      // Auto-reconnect after 3 seconds
+      setTimeout(connectSSE, 3000);
+    };
+  }, [sessionId, adminToken, responseCount]);
+
+  useEffect(() => {
+    connectSSE();
+    return () => {
+      eventSourceRef.current?.close();
+    };
+  }, [connectSSE]);
+
+  const studentUrl = sessionId
+    ? `${window.location.origin}/session/${sessionId}`
+    : '';
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(studentUrl).catch(() => {});
+  };
+
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="container">
+          <div className="loading">Loading dashboard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page">
+        <div className="container">
+          <div className="error-card"><p>{error}</p></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page admin-page">
+      <div className="container admin-container">
+        <header className="admin-header">
+          <h1 className="logo logo-small">ThemePulse</h1>
+          <div className="connection-badge" data-connected={connected}>
+            {connected ? 'Live' : 'Reconnecting...'}
+          </div>
+        </header>
+
+        <div className="admin-layout">
+          {/* Sidebar with QR + info */}
+          <aside className="admin-sidebar">
+            <div className="question-display">
+              <span className="question-label">Question</span>
+              <h2 className="question-text">{question}</h2>
+            </div>
+
+            <div className="qr-section">
+              <p className="qr-label">Students scan to join:</p>
+              <div className="qr-wrapper">
+                <QRCodeSVG value={studentUrl} size={200} level="M" />
+              </div>
+              <div className="link-row">
+                <input
+                  type="text"
+                  className="form-input link-input"
+                  value={studentUrl}
+                  readOnly
+                />
+                <button className="btn btn-secondary" onClick={copyLink}>
+                  Copy
+                </button>
+              </div>
+            </div>
+
+            <div className="response-counter">
+              <span className="counter-number">{responseCount}</span>
+              <span className="counter-label">
+                {responseCount === 1 ? 'response' : 'responses'}
+              </span>
+            </div>
+
+            {responseCount < minRequired && (
+              <p className="waiting-text">
+                Waiting for at least {minRequired} responses to start summarizing...
+              </p>
+            )}
+          </aside>
+
+          {/* Main area with theme cards */}
+          <main className="admin-main">
+            {sseError && (
+              <div className="error-banner">{sseError}</div>
+            )}
+
+            {summary && summary.themes.length > 0 ? (
+              <>
+                <h2 className="themes-heading">Key Themes</h2>
+                <div className="themes-grid">
+                  {summary.themes.map((theme, i) => (
+                    <ThemeCard key={i} theme={theme} index={i} />
+                  ))}
+                </div>
+                <p className="summary-meta">
+                  Based on {summary.response_count} responses
+                  {summary.model_used && <> &middot; Model: {summary.model_used}</>}
+                </p>
+              </>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-icon">&#x1F4CA;</div>
+                <h2>Themes will appear here</h2>
+                <p>
+                  As students submit responses, AI will automatically extract
+                  and display the key themes from their answers.
+                </p>
+              </div>
+            )}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+}
