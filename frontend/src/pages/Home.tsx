@@ -47,7 +47,7 @@ export default function Home() {
           <textarea
             id="question"
             className="form-textarea"
-            placeholder="e.g., What do you think deep learning is?"
+            placeholder="e.g., How do you think Large Language Models work?"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={3}
