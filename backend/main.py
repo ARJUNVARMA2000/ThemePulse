@@ -9,13 +9,15 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import AsyncGenerator
 
 import qrcode
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from models import (
@@ -194,7 +196,7 @@ async def create_session(req: CreateSessionRequest, request: Request):
     session_id = str(uuid.uuid4())[:8]
     admin_token = secrets.token_urlsafe(16)
 
-    base_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+    base_url = str(request.base_url).rstrip("/")
 
     sessions[session_id] = {
         "question": req.question,
@@ -325,7 +327,7 @@ async def get_qr_code(session_id: str, request: Request):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    base_url = os.environ.get("FRONTEND_URL", str(request.base_url).rstrip("/"))
+    base_url = str(request.base_url).rstrip("/")
     student_url = f"{base_url}/session/{session_id}"
 
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
@@ -338,3 +340,21 @@ async def get_qr_code(session_id: str, request: Request):
     buf.seek(0)
 
     return StreamingResponse(buf, media_type="image/png")
+
+
+# ---------------------------------------------------------------------------
+# Static file serving (React SPA)
+# ---------------------------------------------------------------------------
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+if STATIC_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve React SPA - return index.html for all non-API routes."""
+        file_path = STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(STATIC_DIR / "index.html")

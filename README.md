@@ -14,7 +14,7 @@ Live classroom theme extraction tool. A professor posts a question, students sub
 - **Backend**: Python / FastAPI with SSE for real-time updates
 - **Frontend**: React / Vite / TypeScript
 - **AI**: OpenRouter API with 5-model fallback chain
-- **Deployment**: Railway (auto-deploy on push via GitHub)
+- **Deployment**: Railway (single service, auto-deploy on push via GitHub)
 
 ## Local Development
 
@@ -45,59 +45,38 @@ uvicorn main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
-
-# Create .env file
-cp .env.example .env
-# Default VITE_API_URL=http://localhost:8000 should work for local dev
-
 npm run dev
 ```
 
-Visit `http://localhost:5173` to use the app.
+The Vite dev server starts at `http://localhost:5173` and proxies `/api` requests to the backend at `http://localhost:8000`.
 
 ## Environment Variables
 
-### Backend
-
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | Your OpenRouter API key |
-| `FRONTEND_URL` | No | Frontend URL for CORS/QR codes (defaults to `http://localhost:5173`) |
-
-### Frontend
-
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_API_URL` | No | Backend API URL (defaults to `http://localhost:8000`) |
+| Variable | Required | Where | Description |
+|---|---|---|---|
+| `OPENROUTER_API_KEY` | Yes | Backend / Railway | Your OpenRouter API key |
 
 ## Deployment (Railway)
+
+The app deploys as a **single service**: the Dockerfile builds the React frontend, then runs FastAPI which serves both the API and the static files.
 
 ### Using Railway CLI
 
 ```bash
-# Login (if not already)
 railway login
-
-# Initialize project
-railway init
-
-# Link to the project
-railway link
-
-# Deploy
+railway init -n ThemePulse
 railway up
+railway domain          # generate a public URL
+```
+
+Set your OpenRouter API key:
+```bash
+railway variables --set "OPENROUTER_API_KEY=sk-or-v1-your-key"
 ```
 
 ### Auto-Deploy on Push
 
-Once the GitHub repo is connected to Railway, every push to `main` or merged PR triggers an automatic redeploy.
-
-### Services
-
-- **backend** — FastAPI app serving the API at `/api/*`
-- **frontend** — Static React build served via `serve`
-
-Set `OPENROUTER_API_KEY` in the backend service environment variables through the Railway dashboard or CLI.
+Connect your GitHub repo in the Railway dashboard. Every push to `main` or merged PR triggers an automatic redeploy.
 
 ## OpenRouter Models (Fallback Chain)
 
