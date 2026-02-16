@@ -2,6 +2,10 @@
 
 Live classroom theme extraction tool. A professor posts a question, students submit answers via a QR code link, and an LLM (via OpenRouter) auto-summarizes responses into themed cards with student attribution.
 
+## Live Demo
+
+**[https://themepulse-production.up.railway.app/](https://themepulse-production.up.railway.app/)** — Try it live (deployed on Railway).
+
 ## How It Works
 
 1. **Professor** creates a session with a question
