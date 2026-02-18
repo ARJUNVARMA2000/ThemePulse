@@ -1,5 +1,7 @@
 # ClassPulse
 
+[![CI](https://github.com/ARJUNVARMA2000/ClassPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/ARJUNVARMA2000/ClassPulse/actions/workflows/ci.yml)
+
 Live classroom theme extraction tool. A professor posts a question, students submit answers via a QR code link, and an LLM (via OpenRouter) auto-summarizes responses into themed cards with student attribution.
 
 ## Live Demo

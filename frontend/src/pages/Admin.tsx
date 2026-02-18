@@ -19,6 +19,8 @@ export default function Admin() {
   const [sseError, setSseError] = useState('');
   const [connected, setConnected] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const responseCountRef = useRef(responseCount);
+  useEffect(() => { responseCountRef.current = responseCount; }, [responseCount]);
 
   // Load session info
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function Admin() {
       try {
         const data = JSON.parse((e as MessageEvent).data);
         setSseError(data.message || 'Summarization error');
-        setResponseCount(data.response_count || responseCount);
+        setResponseCount(data.response_count || responseCountRef.current);
       } catch {
         // Connection error, will auto-reconnect
       }
@@ -85,7 +87,7 @@ export default function Admin() {
       // Auto-reconnect after 3 seconds
       setTimeout(connectSSE, 3000);
     };
-  }, [sessionId, adminToken, responseCount]);
+  }, [sessionId, adminToken]);
 
   useEffect(() => {
     connectSSE();
